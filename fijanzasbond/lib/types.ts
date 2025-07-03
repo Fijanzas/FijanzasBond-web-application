@@ -7,13 +7,13 @@ export interface User {
 export interface Bond {
   id: string
   name: string
-  issuer: string
   nominalValue: number
   interestRate: number
   totalTerm: number
   paymentFrequency: "monthly" | "quarterly" | "semiannual" | "annual"
   issueDate: string
   maturityDate: string
+  marketRate: number
   currency: "USD" | "PEN" | "EUR"
   rateType: "effective" | "nominal"
   capitalizationFrequency?: "daily" | "monthly" | "quarterly" | "semiannual" | "annual"

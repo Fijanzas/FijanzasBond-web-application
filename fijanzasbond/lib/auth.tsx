@@ -1,13 +1,13 @@
+// Reemplaza el contenido de: lib/auth.tsx
 "use client"
-
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "./types"
+import { apiClient, type LoginResponse } from "./apiClient"
 
 interface AuthContextType {
   user: User | null
-  login: (username: string, password: string) => Promise<boolean>
+  login: (username: string, password: string) => Promise<LoginResponse>
   logout: () => void
   isLoading: boolean
 }
@@ -19,30 +19,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing session
     const savedUser = localStorage.getItem("bond-app-user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
-    }
+    if (savedUser) setUser(JSON.parse(savedUser))
     setIsLoading(false)
   }, [])
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Demo credentials
-    if (username === "admin" && password === "password") {
+  const login = async (username: string, password: string): Promise<LoginResponse> => {
+    const response = await apiClient.login({ username, password })
+    if (response.success && response.user_id && response.username) {
       const user: User = {
-        id: "1",
-        username: "admin",
-        email: "admin@bondpro.com",
+        id: String(response.user_id),
+        username: response.username,
+        email: `${response.username}@fijanzas.com`,
       }
       setUser(user)
       localStorage.setItem("bond-app-user", JSON.stringify(user))
-      return true
     }
-    return false
+    return response
   }
 
   const logout = () => {
@@ -55,8 +48,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
+  if (context === undefined) throw new Error("useAuth must be used within an AuthProvider")
   return context
 }

@@ -1,451 +1,195 @@
+// Reemplaza el contenido completo de: components/bond-form.tsx
+
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { BondStorage } from "@/lib/bond-storage"
-import type { Bond } from "@/lib/types"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
+import { apiClient, type ApiBondPayload } from "@/lib/apiClient"
+import { useAuth } from "@/lib/auth"
 
 interface BondFormProps {
   bondId?: string
-  onSave?: (bond: Bond) => void
 }
 
-export function BondForm({ bondId, onSave }: BondFormProps) {
+// --- CAMBIO: El estado inicial ahora es más simple ---
+const initialFormData = {
+  nominal_value: "",
+  coupon_rate: "",
+  market_rate: "",
+  duration: "",
+  bonus: "",
+  total_grace_period: "",
+  partial_grace_period: "",
+};
+
+export function BondForm({ bondId }: BondFormProps) {
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    name: "",
-    issuer: "",
-    valorComercial: "",
-    costoCavali: "",
-    teaCupon: "",
-    teaMercado: "",
-    primaRedencion: "",
-    flotacion: "",
-    paymentFrequency: "semiannual",
-    currency: "USD",
-    rateType: "effective",
-    capitalizationFrequency: "annual",
-    graceType: "none",
-    graceMonths: "",
-    includeIssuanceCosts: false,
-    issuanceCosts: "",
-  })
+  const { user } = useAuth()
+  const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingData, setIsLoadingData] = useState(!!bondId);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (bondId) {
-      const bond = BondStorage.getBond(bondId)
-      if (bond) {
-        setFormData({
-          name: bond.name,
-          issuer: bond.issuer,
-          valorComercial: bond.valorComercial?.toString() || "",
-          costoCavali: bond.costoCavali?.toString() || "",
-          teaCupon: bond.teaCupon?.toString() || "",
-          teaMercado: bond.teaMercado?.toString() || "",
-          primaRedencion: bond.primaRedencion?.toString() || "",
-          flotacion: bond.flotacion?.toString() || "",
-          paymentFrequency: bond.paymentFrequency,
-          currency: bond.currency,
-          rateType: bond.rateType,
-          capitalizationFrequency: bond.capitalizationFrequency || "annual",
-          graceType: bond.graceType || "none",
-          graceMonths: bond.graceMonths?.toString() || "",
-          includeIssuanceCosts: bond.includeIssuanceCosts,
-          issuanceCosts: bond.issuanceCosts?.toString() || "",
-        })
-      }
+      const fetchBondData = async () => {
+        setIsLoadingData(true);
+        try {
+          const bondData = await apiClient.getBondById(parseInt(bondId, 10));
+          // --- CAMBIO: Rellenamos solo los campos que existen ---
+          setFormData({
+            nominal_value: String(bondData.nominal_value),
+            coupon_rate: String(bondData.coupon_rate * 100),
+            market_rate: String(bondData.market_rate * 100),
+            duration: String(bondData.duration),
+            bonus: String(bondData.bonus * 100),
+            total_grace_period: String(bondData.total_grace_period),
+            partial_grace_period: String(bondData.partial_grace_period),
+          });
+        } catch (error) {
+          setErrors({ general: "Failed to load bond data for editing." });
+        } finally {
+          setIsLoadingData(false);
+        }
+      };
+      fetchBondData();
+    } else {
+      // --- CAMBIO: Valores por defecto para el formulario simplificado ---
+      setFormData({
+        nominal_value: "1000",
+        coupon_rate: "5",
+        market_rate: "6",
+        duration: "5",
+        bonus: "0",
+        total_grace_period: "0",
+        partial_grace_period: "0",
+      });
     }
-  }, [bondId])
+  }, [bondId]);
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {}
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    const { nominal_value, duration, total_grace_period, partial_grace_period, ...rest } = formData;
 
-    if (!formData.name.trim()) newErrors.name = "Bond name is required"
-    if (!formData.issuer.trim()) newErrors.issuer = "Issuer is required"
-    if (!formData.valorComercial || Number.parseFloat(formData.valorComercial) <= 0) {
-      newErrors.valorComercial = "Commercial value must be greater than 0"
-    }
-    if (!formData.costoCavali || Number.parseFloat(formData.costoCavali) < 0) {
-      newErrors.costoCavali = "Cavali cost cannot be negative"
-    }
-    if (!formData.teaCupon || Number.parseFloat(formData.teaCupon) < 0) {
-      newErrors.teaCupon = "TEA Coupon cannot be negative"
-    }
-    if (!formData.teaMercado || Number.parseFloat(formData.teaMercado) < 0) {
-      newErrors.teaMercado = "TEA Market cannot be negative"
-    }
-    if (!formData.primaRedencion || Number.parseFloat(formData.primaRedencion) < 0) {
-      newErrors.primaRedencion = "Redemption premium cannot be negative"
-    }
-    if (!formData.flotacion || Number.parseFloat(formData.flotacion) < 0) {
-      newErrors.flotacion = "Flotation percentage cannot be negative"
-    }
-    if (formData.graceType !== "none" && (!formData.graceMonths || Number.parseInt(formData.graceMonths) <= 0)) {
-      newErrors.graceMonths = "Grace months must be specified when grace period is applied"
+    const nv = parseFloat(nominal_value);
+    if (nominal_value.trim() === '') newErrors.nominal_value = "Required";
+    else if (isNaN(nv)) newErrors.nominal_value = "Must be a number";
+    else if (nv < 1000 || nv > 10000) newErrors.nominal_value = "Must be between 1000 and 10000";
+    else if (nv % 1000 !== 0) newErrors.nominal_value = "Must be a multiple of 1000";
+
+    const d = parseInt(duration, 10);
+    if (duration.trim() === '') newErrors.duration = "Required";
+    else if (isNaN(d)) newErrors.duration = "Must be a number";
+    else if (d < 3 || d > 20) newErrors.duration = "Must be between 3 and 20 years";
+
+    for (const [key, value] of Object.entries(rest)) {
+      if (value.trim() === '') newErrors[key] = "Required";
+      else if (isNaN(parseFloat(value))) newErrors[key] = "Must be a number";
+      else if (parseFloat(value) < 0) newErrors[key] = "Cannot be negative";
     }
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+    const tgp = parseInt(total_grace_period, 10);
+    const pgp = parseInt(partial_grace_period, 10);
+    if (total_grace_period.trim() !== '' && (isNaN(tgp) || tgp < 0)) newErrors.total_grace_period = "Must be a positive number or 0";
+    if (partial_grace_period.trim() !== '' && (isNaN(pgp) || pgp < 0)) newErrors.partial_grace_period = "Must be a positive number or 0";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
+    if (!user) return;
+    if (!validateForm()) return;
 
-    if (!validateForm()) return
-
-    setIsLoading(true)
+    setIsSubmitting(true);
+    setErrors({});
 
     try {
-      const issueDate = new Date().toISOString().split("T")[0]
-      const maturityDate = new Date()
-      maturityDate.setFullYear(maturityDate.getFullYear() + Number.parseInt(formData.totalTerm))
+      // --- CAMBIO: El payload se construye con menos campos del formulario
+      // y asume valores por defecto para los eliminados.
+      const nominalValue = parseFloat(formData.nominal_value);
+      const payload: ApiBondPayload = {
+        user_id: parseInt(user.id, 10),
+        nominal_value: nominalValue,
+        commercial_value: nominalValue, // Asumimos que el valor comercial es igual al nominal
+        coupon_rate: parseFloat(formData.coupon_rate) / 100,
+        market_rate: parseFloat(formData.market_rate) / 100,
+        payment_frequency: 2,
+        duration: parseInt(formData.duration, 10),
+        bonus: parseFloat(formData.bonus) / 100,
+        flotation: 0, // Valor por defecto
+        cavali: 0, // Valor por defecto
+        structuration: 0, // Valor por defecto
+        colocation: 0, // Valor por defecto
+        total_grace_period: formData.total_grace_period ? parseInt(formData.total_grace_period, 10) : 0,
+        partial_grace_period: formData.partial_grace_period ? parseInt(formData.partial_grace_period, 10) : 0,
+      };
 
-      const bond: Bond = {
-        id: bondId || Date.now().toString(),
-        name: formData.name,
-        issuer: formData.issuer,
-        nominalValue: Number.parseFloat(formData.nominalValue),
-        interestRate: Number.parseFloat(formData.interestRate),
-        totalTerm: Number.parseInt(formData.totalTerm),
-        paymentFrequency: formData.paymentFrequency as Bond["paymentFrequency"],
-        issueDate,
-        maturityDate: maturityDate.toISOString().split("T")[0],
-        currency: formData.currency as Bond["currency"],
-        rateType: formData.rateType as Bond["rateType"],
-        capitalizationFrequency: formData.capitalizationFrequency as Bond["capitalizationFrequency"],
-        graceType: formData.graceType as Bond["graceType"],
-        graceMonths: formData.graceType !== "none" ? Number.parseInt(formData.graceMonths) : undefined,
-        includeIssuanceCosts: formData.includeIssuanceCosts,
-        issuanceCosts: formData.includeIssuanceCosts ? Number.parseFloat(formData.issuanceCosts) : undefined,
-        status: "active",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      BondStorage.saveBond(bond)
-
-      if (onSave) {
-        onSave(bond)
+      if (bondId) {
+        await apiClient.updateBond(parseInt(bondId, 10), payload);
+        router.push(`/bonds/${bondId}/results`);
       } else {
-        router.push(`/bonds/${bond.id}/results`)
+        const newBond = await apiClient.createBond(payload);
+        router.push(`/bonds/${newBond.id}/results`);
       }
-    } catch (error) {
-      setErrors({ general: "Failed to save bond. Please try again." })
+    } catch (error: any) {
+      setErrors({ general: (error as Error).message || "An unexpected error occurred." });
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false);
     }
   }
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({ ...prev, [e.target.id]: e.target.value }));
+  }
+
+  const renderInputField = (id: keyof typeof formData, label: string) => (
+      <div key={id} className="space-y-2">
+        <Label htmlFor={id} className="text-white capitalize">{label}</Label>
+        <Input id={id} type="number" step="any" value={formData[id]} onChange={handleInputChange} className={`bg-gray-700/50 border-gray-600 text-white ${errors[id] ? 'border-red-500' : ''}`} placeholder={`Enter ${label.toLowerCase()}`} />
+        {errors[id] && <p className="text-red-400 text-sm mt-1">{errors[id]}</p>}
+      </div>
+  );
+
   return (
-    <Card className="max-w-2xl mx-auto bg-gray-800/50 border-gray-700">
-      <CardHeader>
-        <CardTitle className="text-white">{bondId ? "Edit Bond" : "Register New Bond"}</CardTitle>
-        <CardDescription className="text-gray-400">
-          Enter the bond details to calculate cash flow projections
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {errors.general && (
-            <Alert className="bg-red-900/50 border-red-700">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-red-200">{errors.general}</AlertDescription>
-            </Alert>
+      <Card className="max-w-2xl mx-auto bg-gray-800/50 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white">{bondId ? `Editing Bond #${bondId}` : "Register New Bond"}</CardTitle>
+          <CardDescription className="text-gray-400">
+            {bondId ? "Modify the parameters and save to recalculate." : "Enter bond details to calculate cash flow."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingData ? (
+              <div className="flex justify-center items-center py-20"><Loader2 className="h-8 w-8 animate-spin text-white" /></div>
+          ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {errors.general && <Alert variant="destructive" className="bg-red-900/50 border-red-700 text-red-200"><AlertCircle className="h-4 w-4" /><AlertDescription>{errors.general}</AlertDescription></Alert>}
+
+                {/* --- CAMBIO: Renderizado explícito de los campos restantes --- */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {renderInputField("nominal_value", "Nominal Value")}
+                  {renderInputField("coupon_rate", "Coupon Rate (%)")}
+                  {renderInputField("market_rate", "Market Rate (%)")}
+                  {renderInputField("duration", "Years")}
+                  {renderInputField("bonus", "Bonus (%)")}
+                  {renderInputField("total_grace_period", "Total Grace Period (periods)")}
+                  {renderInputField("partial_grace_period", "Partial Grace Period (periods)")}
+                </div>
+
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white" disabled={isSubmitting}>
+                  {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</> : (bondId ? "Save Changes" : "Create & Calculate")}
+                </Button>
+              </form>
           )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-white">
-                Bond Name
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter bond name"
-              />
-              {errors.name && <p className="text-red-400 text-sm">{errors.name}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="issuer" className="text-white">
-                Issuer
-              </Label>
-              <Input
-                id="issuer"
-                value={formData.issuer}
-                onChange={(e) => setFormData({ ...formData, issuer: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter issuer name"
-              />
-              {errors.issuer && <p className="text-red-400 text-sm">{errors.issuer}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="valorComercial" className="text-white">
-                Valor Comercial
-              </Label>
-              <Input
-                id="valorComercial"
-                type="number"
-                step="0.01"
-                value={formData.valorComercial}
-                onChange={(e) => setFormData({ ...formData, valorComercial: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter commercial value"
-              />
-              {errors.valorComercial && <p className="text-red-400 text-sm">{errors.valorComercial}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="costoCavali" className="text-white">
-                Costo Cavali (%)
-              </Label>
-              <Input
-                id="costoCavali"
-                type="number"
-                step="0.01"
-                value={formData.costoCavali}
-                onChange={(e) => setFormData({ ...formData, costoCavali: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter Cavali cost percentage"
-              />
-              {errors.costoCavali && <p className="text-red-400 text-sm">{errors.costoCavali}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="teaCupon" className="text-white">
-                TEA Cupón (%)
-              </Label>
-              <Input
-                id="teaCupon"
-                type="number"
-                step="0.01"
-                value={formData.teaCupon}
-                onChange={(e) => setFormData({ ...formData, teaCupon: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter coupon TEA"
-              />
-              {errors.teaCupon && <p className="text-red-400 text-sm">{errors.teaCupon}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="teaMercado" className="text-white">
-                TEA Mercado (%)
-              </Label>
-              <Input
-                id="teaMercado"
-                type="number"
-                step="0.01"
-                value={formData.teaMercado}
-                onChange={(e) => setFormData({ ...formData, teaMercado: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter market TEA"
-              />
-              {errors.teaMercado && <p className="text-red-400 text-sm">{errors.teaMercado}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="primaRedencion" className="text-white">
-                Prima de Redención
-              </Label>
-              <Input
-                id="primaRedencion"
-                type="number"
-                step="0.01"
-                value={formData.primaRedencion}
-                onChange={(e) => setFormData({ ...formData, primaRedencion: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter redemption premium"
-              />
-              {errors.primaRedencion && <p className="text-red-400 text-sm">{errors.primaRedencion}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="flotacion" className="text-white">
-                Flotación (%)
-              </Label>
-              <Input
-                id="flotacion"
-                type="number"
-                step="0.01"
-                value={formData.flotacion}
-                onChange={(e) => setFormData({ ...formData, flotacion: e.target.value })}
-                className="bg-gray-700/50 border-gray-600 text-white"
-                placeholder="Enter flotation percentage"
-              />
-              {errors.flotacion && <p className="text-red-400 text-sm">{errors.flotacion}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="text-white">Payment Frequency</Label>
-              <Select
-                value={formData.paymentFrequency}
-                onValueChange={(value) => setFormData({ ...formData, paymentFrequency: value })}
-              >
-                <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="quarterly">Quarterly</SelectItem>
-                  <SelectItem value="semiannual">Semi-annual</SelectItem>
-                  <SelectItem value="annual">Annual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-white">Currency</Label>
-              <Select
-                value={formData.currency}
-                onValueChange={(value) => setFormData({ ...formData, currency: value })}
-              >
-                <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="PEN">PEN</SelectItem>
-                  <SelectItem value="EUR">EUR</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-white">Rate Type</Label>
-              <Select
-                value={formData.rateType}
-                onValueChange={(value) => setFormData({ ...formData, rateType: value })}
-              >
-                <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="effective">Effective Annual Rate</SelectItem>
-                  <SelectItem value="nominal">Nominal Rate with Capitalization</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {formData.rateType === "nominal" && (
-              <div className="space-y-2">
-                <Label className="text-white">Capitalization Frequency</Label>
-                <Select
-                  value={formData.capitalizationFrequency}
-                  onValueChange={(value) => setFormData({ ...formData, capitalizationFrequency: value })}
-                >
-                  <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                    <SelectItem value="quarterly">Quarterly</SelectItem>
-                    <SelectItem value="semiannual">Semi-annual</SelectItem>
-                    <SelectItem value="annual">Annual</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-white">Grace Period</Label>
-              <Select
-                value={formData.graceType}
-                onValueChange={(value) => setFormData({ ...formData, graceType: value })}
-              >
-                <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Grace Period</SelectItem>
-                  <SelectItem value="partial">Partial Grace (Interest Only)</SelectItem>
-                  <SelectItem value="total">Total Grace (No Payments)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {formData.graceType !== "none" && (
-              <div className="space-y-2">
-                <Label htmlFor="graceMonths" className="text-white">
-                  Number of Grace Months
-                </Label>
-                <Input
-                  id="graceMonths"
-                  type="number"
-                  min="1"
-                  max="24"
-                  value={formData.graceMonths}
-                  onChange={(e) => setFormData({ ...formData, graceMonths: e.target.value })}
-                  className="bg-gray-700/50 border-gray-600 text-white"
-                  placeholder="Enter number of months"
-                />
-                {errors.graceMonths && <p className="text-red-400 text-sm">{errors.graceMonths}</p>}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="includeIssuanceCosts"
-                checked={formData.includeIssuanceCosts}
-                onCheckedChange={(checked) => setFormData({ ...formData, includeIssuanceCosts: checked as boolean })}
-              />
-              <Label htmlFor="includeIssuanceCosts" className="text-white">
-                Include Issuance Costs (affects TCEA)
-              </Label>
-            </div>
-
-            {formData.includeIssuanceCosts && (
-              <div className="space-y-2">
-                <Label htmlFor="issuanceCosts" className="text-white">
-                  Issuance Costs
-                </Label>
-                <Input
-                  id="issuanceCosts"
-                  type="number"
-                  step="0.01"
-                  value={formData.issuanceCosts}
-                  onChange={(e) => setFormData({ ...formData, issuanceCosts: e.target.value })}
-                  className="bg-gray-700/50 border-gray-600 text-white"
-                  placeholder="Enter issuance costs"
-                />
-              </div>
-            )}
-          </div>
-
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white" disabled={isLoading}>
-            {isLoading ? "Calculating..." : "Calculate"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
   )
 }
