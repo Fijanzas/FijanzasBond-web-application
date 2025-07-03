@@ -15,21 +15,22 @@ import type { Bond } from "@/lib/types"
 import { Plus, Edit, Trash2, AlertCircle } from "lucide-react" // <-- CAMBIO: Importamos AlertCircle
 import { apiClient, type ApiBondResponse } from "@/lib/apiClient"
 
-// La función de mapeo se mantiene igual
+// En app/dashboard/page.tsx y app/bonds/page.tsx
+
 function mapApiBondToFrontend(apiBond: ApiBondResponse): Bond {
   return {
     id: String(apiBond.id),
-    name: `Bond #${apiBond.id}`,
+    name: `Bond #${apiBond.id}`, // Usaremos esto como nombre principal
     nominalValue: apiBond.nominal_value,
     interestRate: apiBond.coupon_rate * 100,
-    totalTerm: apiBond.duration,
-    paymentFrequency: "semiannual",
+    totalTerm: apiBond.duration, // Recuerda que esto viene en periodos (ej. 10 semestres)
+    paymentFrequency: "semiannual", // Asumimos esto
+    // La API no devuelve estos datos, así que los generamos o los omitimos
     issueDate: new Date().toISOString().split("T")[0],
-    maturityDate: new Date(new Date().setFullYear(new Date().getFullYear() + apiBond.duration)).toISOString().split("T")[0],
+    maturityDate: new Date(new Date().setFullYear(new Date().getFullYear() + (apiBond.duration / 2))).toISOString().split("T")[0],
     currency: "USD",
     rateType: "effective",
     status: "active",
-    includeIssuanceCosts: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

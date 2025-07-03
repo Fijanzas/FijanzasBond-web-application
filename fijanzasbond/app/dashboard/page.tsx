@@ -12,24 +12,24 @@ import type { Bond } from "@/lib/types"
 import { Plus, TrendingUp, DollarSign } from "lucide-react"
 import { apiClient, type ApiBondResponse } from "@/lib/apiClient"
 
+
 function mapApiBondToFrontend(apiBond: ApiBondResponse): Bond {
-  // Mapea la respuesta de la API al tipo 'Bond' del frontend, rellenando los datos que faltan
-  return {
-    id: String(apiBond.id),
-    name: `Bond #${apiBond.id}`,
-    nominalValue: apiBond.nominal_value,
-    interestRate: apiBond.coupon_rate * 100,
-    totalTerm: apiBond.duration,
-    paymentFrequency: "semiannual",
-    issueDate: new Date().toISOString().split("T")[0],
-    maturityDate: new Date(new Date().setFullYear(new Date().getFullYear() + apiBond.duration)).toISOString().split("T")[0],
-    currency: "USD",
-    rateType: "effective",
-    status: "active",
-    includeIssuanceCosts: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+    return {
+        id: String(apiBond.id),
+        name: `Bond #${apiBond.id}`, // Usaremos esto como nombre principal
+        nominalValue: apiBond.nominal_value,
+        interestRate: apiBond.coupon_rate * 100,
+        totalTerm: apiBond.duration, // Recuerda que esto viene en periodos (ej. 10 semestres)
+        paymentFrequency: "semiannual", // Asumimos esto
+        // La API no devuelve estos datos, así que los generamos o los omitimos
+        issueDate: new Date().toISOString().split("T")[0],
+        maturityDate: new Date(new Date().setFullYear(new Date().getFullYear() + (apiBond.duration / 2))).toISOString().split("T")[0],
+        currency: "USD",
+        rateType: "effective",
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
 }
 
 export default function DashboardPage() {
