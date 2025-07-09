@@ -60,7 +60,7 @@ export class BondCalculator {
             convexity,
             tcea: backendResults.TCEA,
             trea: backendResults.TREA,
-            yieldToMaturity: bond.marketRate, // Usamos la tasa de mercado como YTM aproximado
+            yieldToMaturity: bond.marke_Rate, // Usamos la tasa de mercado como YTM aproximado
             theoreticalPrice,
         };
     }

@@ -160,7 +160,7 @@ export function BondResults({ bondId }: BondResultsProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Card className="bg-gray-800/50 border-gray-700"><CardHeader><CardTitle className="text-white text-lg">TCEA</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-primary">{formatPercentage(results.TCEA)}</p></CardContent></Card>
                 <Card className="bg-gray-800/50 border-gray-700"><CardHeader><CardTitle className="text-white text-lg">TREA</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-primary">{formatPercentage(results.TREA)}</p></CardContent></Card>
-                <Card className="bg-gray-800/50 border-gray-700"><CardHeader><CardTitle className="text-white text-lg">Theoretical Price</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-primary">{formatCurrency(results.Precio_Maximo)}</p></CardContent></Card>
+                <Card className="bg-gray-800/50 border-gray-700"><CardHeader><CardTitle className="text-white text-lg">Market Value</CardTitle></CardHeader><CardContent><p className="text-2xl font-bold text-primary">{formatCurrency(results.Precio_Maximo)}</p></CardContent></Card>
                 <Card className="bg-gray-800/50 border-gray-700 md:col-span-3">
                   <CardHeader><CardTitle className="text-white text-lg">Risk & Duration Metrics</CardTitle></CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">

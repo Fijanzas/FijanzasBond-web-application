@@ -73,27 +73,49 @@ export function BondForm({ bondId }: BondFormProps) {
     }
   }, [bondId]);
 
+  // En components/bond-form.tsx
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    const { nominal_value, duration, total_grace_period, partial_grace_period, ...rest } = formData;
+    // Desestructuramos para separar los campos con validaciones especiales
+    const {
+      nominal_value,
+      duration,
+      bonus, // Sacamos 'bonus' para darle un tratamiento especial
+      total_grace_period,
+      partial_grace_period,
+      ...rest
+    } = formData;
 
+    // --- Validación para Valor Nominal (sin cambios) ---
     const nv = parseFloat(nominal_value);
     if (nominal_value.trim() === '') newErrors.nominal_value = "Required";
     else if (isNaN(nv)) newErrors.nominal_value = "Must be a number";
     else if (nv < 1000 || nv > 10000) newErrors.nominal_value = "Must be between 1000 and 10000";
     else if (nv % 1000 !== 0) newErrors.nominal_value = "Must be a multiple of 1000";
 
+    // --- Validación para Años (Duration) (sin cambios) ---
     const d = parseInt(duration, 10);
     if (duration.trim() === '') newErrors.duration = "Required";
     else if (isNaN(d)) newErrors.duration = "Must be a number";
     else if (d < 3 || d > 20) newErrors.duration = "Must be between 3 and 20 years";
 
+    // --- CAMBIO: Validación específica para Bonus ---
+    const bonusValue = parseFloat(bonus);
+    if (bonus.trim() === '') {
+      newErrors.bonus = "Required";
+    } else if (isNaN(bonusValue)) {
+      newErrors.bonus = "Must be a valid number";
+    }
+
+    // --- Validación general para el resto de los campos ---
     for (const [key, value] of Object.entries(rest)) {
       if (value.trim() === '') newErrors[key] = "Required";
       else if (isNaN(parseFloat(value))) newErrors[key] = "Must be a number";
       else if (parseFloat(value) < 0) newErrors[key] = "Cannot be negative";
     }
 
+    // --- Validación opcional para los períodos de gracia (sin cambios) ---
     const tgp = parseInt(total_grace_period, 10);
     const pgp = parseInt(partial_grace_period, 10);
     if (total_grace_period.trim() !== '' && (isNaN(tgp) || tgp < 0)) newErrors.total_grace_period = "Must be a positive number or 0";
